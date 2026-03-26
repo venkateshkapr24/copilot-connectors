@@ -140,6 +140,54 @@ Before using the Microsoft Entra ID-based authentication method, ensure the foll
    ![Screenshot that shows how to Add a Client Application.](media/sharepoint-server-connector/add-a-client-application.png)
    
 
+###### Configure ScopedClientIdentifier for Graph Connector authentication
+
+While the standard OIDC setup allows users to sign in via a browser, the Microsoft 365 Copilot connector requires an explicit mapping between your SharePoint site and the Microsoft Entra ID application registration. This is handled by the `ScopedClientIdentifier` property on the token issuer.
+
+> [!IMPORTANT]
+> Setting the `ScopedClientIdentifier` is not required for standard OIDC user login, but it is mandatory for the Graph Connector to successfully authenticate and crawl your SharePoint Server sites. Without this mapping, the connector returns a **401 Unauthorized** error.
+
+**Prerequisites**
+
+- **Application ID URI**: Found in the Entra ID portal under **App registrations** > **Expose an API** (for example, `api://xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
+- **Token issuer name**: The name of the `SPTrustedIdentityTokenIssuer` created during your initial OIDC setup.
+
+**Implementation steps**
+
+Run the following PowerShell commands in the SharePoint Management Shell as a Farm Administrator:
+
+```PowerShell
+# 1. Get the existing trusted identity token issuer
+$t = Get-SPTrustedIdentityTokenIssuer -Identity "<TokenIssuerName>"
+
+# 2. Add the scoped client identifier for the SharePoint site
+# This maps your local URL to the Entra ID Application ID URI
+$uri = New-Object System.Uri ("<SiteCollectionURL>")
+$t.ScopedClientIdentifier.Add($uri, "<ApplicationIDURI>")
+
+# 3. Commit the changes to the SharePoint farm
+$t.Update()
+```
+
+**Parameter reference**
+
+| Placeholder | Description | Example |
+|---|---|---|
+| `<TokenIssuerName>` | The name of your OIDC provider in SharePoint. | `EntraID OIDC` |
+| `<SiteCollectionURL>` | The full HTTPS URL of the site collection to be indexed. | `https://sharepoint.contoso.com/` |
+| `<ApplicationIDURI>` | The **Application ID URI** from the Entra app registration. | `api://00000000-0000-0000-0000-000000000000` |
+
+**Verification**
+
+To confirm that the mapping has been successfully applied to the issuer, run the following command:
+
+```PowerShell
+(Get-SPTrustedIdentityTokenIssuer -Identity "<TokenIssuerName>").ScopedClientIdentifier
+```
+
+> [!TIP]
+> If you're indexing multiple site collections (for example, `https://portal.contoso.com` and `https://hr.contoso.com`), repeat the `$t.ScopedClientIdentifier.Add()` command for each unique URL before calling `$t.Update()`.
+
 ### 5. Select Site Collections
 
 Select which site collections you want to index. The site collections belong to the web application within the SharePoint URL provided. This list can be long based on the number of site collections available in the data source.
